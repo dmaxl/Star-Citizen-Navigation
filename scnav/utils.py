@@ -2,173 +2,206 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import logging
 from math import sqrt, degrees, radians, cos, acos, sin, asin, tan ,atan2, copysign, pi
 import sys
+from typing import NamedTuple
 
-from .db import getDatabase
+from . import db
 
 logger = logging.getLogger(__name__)
 
 
-def get_local_xyz(lat : float, long : float, height : float, Container : dict):
+class Vector(NamedTuple):
+    x: float
+    y: float
+    z: float = 0
+
+    def magnitude(self):
+        """Return the magnitude (length) of the vector."""
+        return sqrt(self.x**2 + self.y**2 + self.z**2)
+
+    def cross(self, b : Vector):
+        """Compute the cross product of two vectors."""
+        if not isinstance(b, Vector):
+            return NotImplemented
+        return Vector(
+            self.y * b.z - self.z * b.y,
+            self.z * b.x - self.x * b.z,
+            self.x * b.y - self.y * b.x
+        )
+
+    def dot(self, b : Vector):
+        """Return the dot product with another vector."""
+        return self.x*b.x + self.y*b.y + self.z*b.z
+
+    def angle_between(self, b : Vector):
+        """Return the angle (in radians) of another vector to this one."""
+        try:
+            return acos(self.dot(b) / (self.magnitude() * b.magnitude()))
+        except ZeroDivisionError:
+            return 0.0
+
+    def rotateZ(self, angle : float):
+        """Return this vector rotated around the Z axis by angle radians."""
+        x = self.x*cos(angle) - self.y*sin(angle)
+        y = self.x*sin(angle) + self.y*cos(angle)
+        return Vector(x, y, self.z)
+
+    ### Python data model numeric type methods
+    # Note: In the standard signature of these methods the
+    # arguments are named 'self' and 'other'. For the sake
+    # of clarity and brevity we call them 'a' and 'b'.
+
+    def __add__(a, b):
+        if not isinstance(b, Vector):
+            return NotImplemented
+        return Vector(a.x + b.x, a.y + b.y, a.z + b.z)
+
+    def __sub__(a, b):
+        if not isinstance(b, Vector):
+            return NotImplemented
+        return Vector(a.x - b.x, a.y - b.y, a.z - b.z)
+
+
+class Quaternion(NamedTuple):
+    w: float
+    i: float
+    j: float
+    k: float
+
+
+@dataclass(frozen=True)
+class Location:
+    name: str
+    parent: str | None
+    coord: Vector
+    rot: Quaternion
+    qtmarker: bool
+
+
+@dataclass(frozen=True)
+class OrbitalBody(Location):
+    om_radius: float        # km
+    body_radius: float      # km
+    arrival_radius: float   # km
+    time_lines: float
+    rotation_speed: float
+    rotation_adjust: float
+    orbital_radius: float
+    orbital_speed: float
+    orbital_angle: float
+    grid_radius: float
+    pois: dict
+
+
+def get_local_vector_from_latlon(lat: float, lon: float, height: float, parent: OrbitalBody):
     lat_rad = radians(lat)
-    long_rad = radians(-1*long)
+    lon_rad = radians(-1*lon)
 
-    Radius = Container["Body Radius"]
-    Radial_Distance = Radius + height
+    radial_dist = parent.body_radius + height
 
-    local_coordinates = {
-        "X": Radial_Distance * cos(lat_rad) * sin(long_rad),
-        "Y": Radial_Distance * cos(lat_rad) * cos(long_rad),
-        "Z": Radial_Distance * sin(lat_rad),
-    }
+    return Vector(
+        radial_dist * cos(lat_rad) * sin(lon_rad),
+        radial_dist * cos(lat_rad) * cos(lon_rad),
+        radial_dist * sin(lat_rad),
+    )
 
-    return local_coordinates
-
-def vector_norm(a):
-    """Returns the norm of a vector"""
-    return sqrt(a["X"]**2 + a["Y"]**2 + a["Z"]**2)
-
-def vector_product(a, b):
-    """Returns the dot product of two vectors"""
-    return a["X"]*b["X"] + a["Y"]*b["Y"] + a["Z"]*b["Z"]
-
-def angle_between_vectors(a, b):
-    """Function that returns an angle in degrees between 2 vectors"""
-    try :
-        angle = degrees(acos(vector_product(a, b) / (vector_norm(a) * vector_norm(b))))
-    except ZeroDivisionError:
-        angle = 0.0
-    return angle
-
-def rotate_point_2D(Unrotated_coordinates, angle):
-    Rotated_coordinates = {}
-    Rotated_coordinates["X"] = Unrotated_coordinates["X"] * cos(angle) - Unrotated_coordinates["Y"]*sin(angle)
-    Rotated_coordinates["Y"] = Unrotated_coordinates["X"] * sin(angle) + Unrotated_coordinates["Y"]*cos(angle)
-    Rotated_coordinates["Z"] = Unrotated_coordinates["Z"]
-    return (Rotated_coordinates)
-
-
-def get_current_container(X : float, Y : float, Z : float):
-    Database = getDatabase()
-    Actual_Container = {
-        "Name": "None",
-        "X": 0,
-        "Y": 0,
-        "Z": 0,
-        "Rotation Speed": 0,
-        "Rotation Adjust": 0,
-        "OM Radius": 0,
-        "Body Radius": 0,
-        "POI": {}
-    }
-    for i in Database["Containers"] :
-        Container_vector = {"X" : Database["Containers"][i]["X"] - X, "Y" : Database["Containers"][i]["Y"] - Y, "Z" : Database["Containers"][i]["Z"] - Z}
-        if vector_norm(Container_vector) <= 3 * Database["Containers"][i]["OM Radius"]:
-            Actual_Container = Database["Containers"][i]
+def get_current_container(global_coordinate : Vector):
+    Database = db.getDatabase()
+    for name, orbitalbody in Database["Containers"].items():
+        relative_vector = orbitalbody.coord - global_coordinate
+        if relative_vector.magnitude() <= 3 * orbitalbody.om_radius:
+            Actual_Container = orbitalbody
     return Actual_Container
 
 
-def get_local_rotated_coordinates(Time_passed : float, X : float, Y : float, Z : float, Actual_Container : dict):
-
+def get_local_rotated_coordinates(Time_passed : float, coordinate : Vector, Actual_Container : OrbitalBody):
     try:
-        Rotation_speed_in_degrees_per_second = 0.1 * (1/Actual_Container["Rotation Speed"])
+        Rotation_speed_in_degrees_per_second = 0.1 * (1/Actual_Container.rotation_speed)
     except ZeroDivisionError:
         Rotation_speed_in_degrees_per_second = 0
 
-    Rotation_state_in_degrees = ((Rotation_speed_in_degrees_per_second * Time_passed) + Actual_Container["Rotation Adjust"]) % 360
+    Rotation_state_in_degrees = ((Rotation_speed_in_degrees_per_second * Time_passed) + Actual_Container.rotation_adjust) % 360
 
-    local_unrotated_coordinates = {
-        "X": X - Actual_Container["X"],
-        "Y": Y - Actual_Container["Y"],
-        "Z": Z - Actual_Container["Z"]
-    }
-
-    local_rotated_coordinates = rotate_point_2D(local_unrotated_coordinates, radians(-1*Rotation_state_in_degrees))
-
-    return local_rotated_coordinates
+    local_unrotated_coordinates = coordinate - Actual_Container.coord
+    return local_unrotated_coordinates.rotateZ(radians(-1*Rotation_state_in_degrees))
 
 
-def get_lat_long_height(X : float, Y : float, Z : float, Container : dict):
-    Radius = Container["Body Radius"]
-
-    Radial_Distance = sqrt(X**2 + Y**2 + Z**2)
-
+def get_lat_long_height(coordinate : Vector, Container : OrbitalBody):
+    Radius = Container.body_radius
+    Radial_Distance = coordinate.magnitude()
     Height = Radial_Distance - Radius
 
     #Latitude
     try :
-        Latitude = degrees(asin(Z/Radial_Distance))
+        Latitude = degrees(asin(coordinate.z/Radial_Distance))
     except :
         Latitude = 0
 
     try :
-        Longitude = -1*degrees(atan2(X, Y))
+        Longitude = -1*degrees(atan2(coordinate.x, coordinate.y))
     except :
         Longitude = 0
 
-    return [Latitude, Longitude, Height]
+    return (Latitude, Longitude, Height)
 
 
-def get_closest_POI(X : float, Y : float, Z : float, Container : dict, Quantum_marker : bool = False):
-
+def get_closest_POI(coordinate : Vector, Container : OrbitalBody, Quantum_marker : bool = False):
     Distances_to_POIs = []
 
-    for POI in Container["POI"]:
-        Vector_POI = {
-            "X": abs(X - Container["POI"][POI]["X"]),
-            "Y": abs(Y - Container["POI"][POI]["Y"]),
-            "Z": abs(Z - Container["POI"][POI]["Z"])
-        }
+    for name, POI in Container.pois.items():
+        Vector_POI = coordinate - POI.coord
+        Distance_POI = Vector_POI.magnitude()
 
-        Distance_POI = vector_norm(Vector_POI)
-
-        if Quantum_marker and Container["POI"][POI]["QTMarker"] == "TRUE" or not Quantum_marker:
-            Distances_to_POIs.append({"Name" : POI, "Distance" : Distance_POI})
+        if Quantum_marker and POI.qtmarker or not Quantum_marker:
+            Distances_to_POIs.append({"Name" : name, "Distance" : Distance_POI})
 
     Target_to_POIs_Distances_Sorted = sorted(Distances_to_POIs, key=lambda k: k['Distance'])
     return Target_to_POIs_Distances_Sorted
 
 
 
-def get_closest_oms(X : float, Y : float, Z : float, Container : dict):
+def get_closest_oms(coordinate : Vector, Container : OrbitalBody):
     Closest_OM = {}
 
-    if X >= 0:
-        Closest_OM["X"] = {"OM" : Container["POI"]["OM-5"], "Distance" : vector_norm({"X" : X - Container["POI"]["OM-5"]["X"], "Y" : Y - Container["POI"]["OM-5"]["Y"], "Z" : Z - Container["POI"]["OM-5"]["Z"]})}
+    if coordinate.x >= 0:
+        Closest_OM["X"] = {"OM" : Container.pois["OM-5"], "Distance" : (coordinate - Container.pois['OM-5'].coord).magnitude()}
     else:
-        Closest_OM["X"] = {"OM" : Container["POI"]["OM-6"], "Distance" : vector_norm({"X" : X - Container["POI"]["OM-6"]["X"], "Y" : Y - Container["POI"]["OM-6"]["Y"], "Z" : Z - Container["POI"]["OM-6"]["Z"]})}
-    if Y >= 0:
-        Closest_OM["Y"] = {"OM" : Container["POI"]["OM-3"], "Distance" : vector_norm({"X" : X - Container["POI"]["OM-3"]["X"], "Y" : Y - Container["POI"]["OM-3"]["Y"], "Z" : Z - Container["POI"]["OM-3"]["Z"]})}
+        Closest_OM["X"] = {"OM" : Container.pois["OM-6"], "Distance" : (coordinate - Container.pois['OM-6'].coord).magnitude()}
+
+    if coordinate.y >= 0:
+        Closest_OM["Y"] = {"OM" : Container.pois["OM-3"], "Distance" : (coordinate - Container.pois['OM-3'].coord).magnitude()}
     else:
-        Closest_OM["Y"] = {"OM" : Container["POI"]["OM-4"], "Distance" : vector_norm({"X" : X - Container["POI"]["OM-4"]["X"], "Y" : Y - Container["POI"]["OM-4"]["Y"], "Z" : Z - Container["POI"]["OM-4"]["Z"]})}
-    if Z >= 0:
-        Closest_OM["Z"] = {"OM" : Container["POI"]["OM-1"], "Distance" : vector_norm({"X" : X - Container["POI"]["OM-1"]["X"], "Y" : Y - Container["POI"]["OM-1"]["Y"], "Z" : Z - Container["POI"]["OM-1"]["Z"]})}
+        Closest_OM["Y"] = {"OM" : Container.pois["OM-4"], "Distance" : (coordinate - Container.pois['OM-4'].coord).magnitude()}
+
+    if coordinate.z >= 0:
+        Closest_OM["Z"] = {"OM" : Container.pois["OM-1"], "Distance" : (coordinate - Container.pois['OM-1'].coord).magnitude()}
     else:
-        Closest_OM["Z"] = {"OM" : Container["POI"]["OM-2"], "Distance" : vector_norm({"X" : X - Container["POI"]["OM-2"]["X"], "Y" : Y - Container["POI"]["OM-2"]["Y"], "Z" : Z - Container["POI"]["OM-2"]["Z"]})}
+        Closest_OM["Z"] = {"OM" : Container.pois["OM-2"], "Distance" : (coordinate - Container.pois['OM-2'].coord).magnitude()}
 
     return Closest_OM
 
 
 
 def get_sunset_sunrise_predictions(
-    X : float, Y : float, Z : float,
+    # X : float, Y : float, Z : float,
     Latitude : float, Longitude : float, Height : float,
-    Container : dict, Star : dict,
+    Container : OrbitalBody, Star : OrbitalBody,
     JulianDate : float):
     try :
         # Stanton X Y Z coordinates in refrence of the center of the system
-        sx, sy, sz = Star["X"], Star["Y"], Star["Z"]
+        sx, sy, sz = Star.coord
 
         # Container X Y Z coordinates in refrence of the center of the system
-        bx, by, bz = Container["X"], Container["Y"], Container["Z"]
+        bx, by, bz = Container.coord
 
         # Rotation speed of the container
-        rotation_speed = Container["Rotation Speed"]
+        rotation_speed = Container.rotation_speed
 
         # Container qw/qx/qy/qz quaternion rotation
-        qw, qx, qy, qz = Container["qw"], Container["qx"], Container["qy"], Container["qz"]
+        qw, qx, qy, qz = Container.rot
 
         # Stanton X Y Z coordinates in refrence of the center of the container
         bsx = ((1-(2*qy**2)-(2*qz**2))*(sx-bx))+(((2*qx*qy)-(2*qz*qw))*(sy-by))+(((2*qx*qz)+(2*qy*qw))*(sz-bz))
@@ -179,7 +212,7 @@ def get_sunset_sunrise_predictions(
         Solar_declination = degrees(acos((((sqrt(bsx**2+bsy**2+bsz**2))**2)+((sqrt(bsx**2+bsy**2))**2)-(bsz**2))/(2*(sqrt(bsx**2+bsy**2+bsz**2))*(sqrt(bsx**2+bsy**2)))))*copysign(1,bsz)
 
         # Radius of Stanton
-        StarRadius = Star["Body Radius"] # OK
+        StarRadius = Star.body_radius # OK
 
         # Apparent Radius of Stanton
         Apparent_Radius = degrees(asin(StarRadius/(sqrt((bsx)**2+(bsy)**2+(bsz)**2))))
@@ -206,7 +239,7 @@ def get_sunset_sunrise_predictions(
         # The rotation correction is a value that accounts for the rotation of the planet on Jan 1, 2020 as we don’t know
         # exactly when the rotation of the planet started.  This value is measured and corrected during a rotation
         # alignment that is performed periodically in-game and is retrieved from the navigation database.
-        RotationCorrection = Container["Rotation Adjust"]
+        RotationCorrection = Container.rotation_adjust
 
         # CurrentRotation is how far the planet has rotated in this current day/night cycle expressed in the number of
         # degrees remaining before the planet completes another day/night cycle.
@@ -237,7 +270,7 @@ def get_sunset_sunrise_predictions(
         Longitude360 = Longitude%360 # OK
 
         # Determine correction for location height
-        ElevationCorrection = degrees(acos(Container["Body Radius"]/(Container["Body Radius"]))) if Height<0 else degrees(acos(Container["Body Radius"]/(Container["Body Radius"]+Height)))
+        ElevationCorrection = degrees(acos(Container.body_radius/(Container.body_radius))) if Height<0 else degrees(acos(Container.body_radius/(Container.body_radius+Height)))
 
         # Determine Rise/Set Hour Angle
         # The star rises at + (positive value) rise/set hour angle and sets at - (negative value) rise/set hour angle
@@ -331,5 +364,6 @@ def get_sunset_sunrise_predictions(
         return [state_of_the_day, next_event, next_event_time]
 
     except Exception as e:
-        print(f"Error in sunrise/sunset calculations: \n{e}\nValues were:\n-X : {X}\n-Y : {Y}\n-Z : {Z}\n-Latitude : {Latitude}\n-Longitude : {Longitude}\n-Height : {Height}\n-Container : {Container['Name']}\n-Star : {Star['Name']}", file=sys.stderr)
+        raise e
+        print(f"Error in sunrise/sunset calculations: \n{e}\nValues were:\n-Latitude : {Latitude}\n-Longitude : {Longitude}\n-Height : {Height}\n-Container : {Container.name}\n-Star : {Star.name}", file=sys.stderr)
         return ["Unknown", "Unknown", 0]
