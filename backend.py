@@ -607,6 +607,10 @@ while True:
             New_Player_Global_coordinates['Y'] = float(new_clipboard_splitted[5])/1000
             New_Player_Global_coordinates['Z'] = float(new_clipboard_splitted[7])/1000
 
+            # for debugging with saved data, manually specify the time
+            if len(new_clipboard_splitted) == 10:
+                New_time = float(new_clipboard_splitted[9])
+
 
 
             #-----------------------------------------------------planetary_nav--------------------------------------------------------------
@@ -852,7 +856,7 @@ while True:
 
                 #------------------------------------------------------------Backend to Frontend------------------------------------------------------------
                 new_data = {
-                    "updated" : f"{time.strftime('%H:%M:%S', time.localtime(time.time()))}",
+                    "updated" : f"{time.strftime('%H:%M:%S', time.localtime(New_time))}",
                     "target" : Target['Name'],
                     "player_actual_container" : Actual_Container['Name'],
                     "target_container" : Target['Container'],
@@ -913,8 +917,8 @@ while True:
                             str(player_Longitude),
                             str(player_Latitude),
                             str(player_Height*1000),
-                            str(time.time()),
-                            time.strftime('%d %b %Y %H:%M:%S', time.gmtime(time.time())),
+                            str(New_time),
+                            time.strftime('%d %b %Y %H:%M:%S', time.gmtime(New_time)),
                             "",
                             ""
                         ]
@@ -1042,7 +1046,7 @@ while True:
 
                 #------------------------------------------------------------Backend to Frontend------------------------------------------------------------
                 new_data = {
-                    "updated" : f"Updated : {time.strftime('%H:%M:%S', time.localtime(time.time()))}",
+                    "updated" : f"Updated : {time.strftime('%H:%M:%S', time.localtime(New_time))}",
                     "target" : Target['Name'],
                     "player_x" : round(New_Player_Global_coordinates['X'], 3),
                     "player_y" : round(New_Player_Global_coordinates['Y'], 3),
@@ -1217,7 +1221,7 @@ while True:
                 #------------------------------------------------------------Backend to Frontend------------------------------------------------------------
                 if Actual_Container["Name"] == "None":
                     new_data = {
-                        "updated" : f"Updated : {time.strftime('%H:%M:%S', time.localtime(time.time()))}",
+                        "updated" : f"Updated : {time.strftime('%H:%M:%S', time.localtime(New_time))}",
                         "player_global_x" : f"Global X : {round(New_Player_Global_coordinates['X'], 3)}",
                         "player_global_y" : f"Global Y : {round(New_Player_Global_coordinates['Y'], 3)}",
                         "player_global_z" : f"Global Z : {round(New_Player_Global_coordinates['Z'], 3)}",
@@ -1236,7 +1240,7 @@ while True:
                     }
                 else :
                     new_data = {
-                        "updated" : f"Updated : {time.strftime('%H:%M:%S', time.localtime(time.time()))}",
+                        "updated" : f"Updated : {time.strftime('%H:%M:%S', time.localtime(New_time))}",
                         "player_global_x" : f"Global X : {round(New_Player_Global_coordinates['X'], 3)}",
                         "player_global_y" : f"Global Y : {round(New_Player_Global_coordinates['Y'], 3)}",
                         "player_global_z" : f"Global Z : {round(New_Player_Global_coordinates['Z'], 3)}",
