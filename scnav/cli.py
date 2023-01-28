@@ -17,6 +17,7 @@ import webbrowser
 import argparse
 
 from .db import getDatabase, getSettings
+from .types import *
 from .utils import *
 
 
@@ -324,7 +325,7 @@ def main():
                     target_Rotation_state_in_degrees = ((target_Rotation_speed_in_degrees_per_second * Time_passed_since_reference_in_seconds) + DATABASE["Containers"][Target.parent].rotation_adjust) % 360
 
                     #get the new player rotated coordinates
-                    target_rotated_coordinates = Target.coord.rotateZ(radians(target_Rotation_state_in_degrees))
+                    target_rotated_coordinates = Target.coords.rotateZ(radians(target_Rotation_state_in_degrees))
 
 
 
@@ -335,7 +336,7 @@ def main():
                         player_Latitude, player_Longitude, player_Height = get_lat_long_height(New_player_local_rotated_coordinates, Actual_Container)
 
                     #-------------------------------------------------target local Long Lat Height--------------------------------------------------
-                    target_Latitude, target_Longitude, target_Height = get_lat_long_height(Target.coord, DATABASE["Containers"][Target.parent])
+                    target_Latitude, target_Longitude, target_Height = get_lat_long_height(Target.coords, DATABASE["Containers"][Target.parent])
 
 
 
@@ -343,7 +344,7 @@ def main():
                     New_Distance_to_POI = {}
 
                     if Actual_Container == Target.parent:
-                        New_Distance_to_POI = Target.coord - New_player_local_rotated_coordinates
+                        New_Distance_to_POI = Target.coords - New_player_local_rotated_coordinates
                     else:
                         New_Distance_to_POI = target_rotated_coordinates + DATABASE["Containers"][Target.parent].coord - New_Player_Global_coordinates
 
@@ -393,7 +394,7 @@ def main():
 
                     #----------------------------------------------------Closest Quantumable POI--------------------------------------------------------
                     if not Target.qtmarker:
-                        Target_to_POIs_Distances_Sorted = get_closest_POI(Target.coord, DATABASE["Containers"][Target.parent], True)
+                        Target_to_POIs_Distances_Sorted = get_closest_POI(Target.coords, DATABASE["Containers"][Target.parent], True)
 
                     else :
                         Target_to_POIs_Distances_Sorted = [{
@@ -412,7 +413,7 @@ def main():
 
 
                     #-------------------------------------------------------3 Closest OMs to target---------------------------------------------------------------
-                    target_Closest_OM = get_closest_oms(Target.coord, DATABASE["Containers"][Target.parent])
+                    target_Closest_OM = get_closest_oms(Target.coords, DATABASE["Containers"][Target.parent])
 
 
 
@@ -422,7 +423,7 @@ def main():
 
 
                     #get the vector between current_pos and target_pos
-                    Current_target_pos_vector = Target.coord - New_player_local_rotated_coordinates
+                    Current_target_pos_vector = Target.coords - New_player_local_rotated_coordinates
 
 
                     #get the angle between the current-target_pos vector and the previous-current_pos vector
@@ -449,7 +450,7 @@ def main():
                     previous_to_center = Vector(0, 0, 0) - previous
 
                     #Vector BD (Current -> Target)
-                    current_to_target = Target.coord - current
+                    current_to_target = Target.coords - current
 
                     #Vector BC (C = center of the planet, Current -> Center)
                     current_to_center = Vector(0, 0, 0) - current
@@ -527,9 +528,9 @@ def main():
                         "player_state_of_the_day" : f"{player_state_of_the_day}",
                         "player_next_event" : f"{player_next_event}",
                         "player_next_event_time" : f"{time.strftime('%H:%M:%S', time.localtime(New_time + player_next_event_time*60))}",
-                        "target_x" : Target.coord.x,
-                        "target_y" : Target.coord.y,
-                        "target_z" : Target.coord.z,
+                        "target_x" : Target.coords.x,
+                        "target_y" : Target.coords.y,
+                        "target_z" : Target.coords.z,
                         "target_long" : f"{round(target_Longitude, 2)}°",
                         "target_lat" : f"{round(target_Latitude, 2)}°",
                         "target_height" : f"{round(target_Height, 1)} km",

@@ -2,98 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
 from math import sqrt, degrees, radians, cos, acos, sin, asin, tan ,atan2, copysign, pi
 import sys
-from typing import NamedTuple
 
 from . import db
+from .types import *
 
 logger = logging.getLogger(__name__)
-
-
-class Vector(NamedTuple):
-    x: float
-    y: float
-    z: float = 0
-
-    def magnitude(self):
-        """Return the magnitude (length) of the vector."""
-        return sqrt(self.x**2 + self.y**2 + self.z**2)
-
-    def cross(self, b : Vector):
-        """Compute the cross product of two vectors."""
-        if not isinstance(b, Vector):
-            return NotImplemented
-        return Vector(
-            self.y * b.z - self.z * b.y,
-            self.z * b.x - self.x * b.z,
-            self.x * b.y - self.y * b.x
-        )
-
-    def dot(self, b : Vector):
-        """Return the dot product with another vector."""
-        return self.x*b.x + self.y*b.y + self.z*b.z
-
-    def angle_between(self, b : Vector):
-        """Return the angle (in radians) of another vector to this one."""
-        try:
-            return acos(self.dot(b) / (self.magnitude() * b.magnitude()))
-        except ZeroDivisionError:
-            return 0.0
-
-    def rotateZ(self, angle : float):
-        """Return this vector rotated around the Z axis by angle radians."""
-        x = self.x*cos(angle) - self.y*sin(angle)
-        y = self.x*sin(angle) + self.y*cos(angle)
-        return Vector(x, y, self.z)
-
-    ### Python data model numeric type methods
-    # Note: In the standard signature of these methods the
-    # arguments are named 'self' and 'other'. For the sake
-    # of clarity and brevity we call them 'a' and 'b'.
-
-    def __add__(a, b):
-        if not isinstance(b, Vector):
-            return NotImplemented
-        return Vector(a.x + b.x, a.y + b.y, a.z + b.z)
-
-    def __sub__(a, b):
-        if not isinstance(b, Vector):
-            return NotImplemented
-        return Vector(a.x - b.x, a.y - b.y, a.z - b.z)
-
-
-class Quaternion(NamedTuple):
-    w: float
-    i: float
-    j: float
-    k: float
-
-
-@dataclass(frozen=True)
-class Location:
-    name: str
-    parent: str | None
-    coord: Vector
-    rot: Quaternion
-    qtmarker: bool
-
-
-@dataclass(frozen=True)
-class OrbitalBody(Location):
-    om_radius: float        # km
-    body_radius: float      # km
-    arrival_radius: float   # km
-    time_lines: float
-    rotation_speed: float
-    rotation_adjust: float
-    orbital_radius: float
-    orbital_speed: float
-    orbital_angle: float
-    grid_radius: float
-    pois: dict
 
 
 def get_local_vector_from_latlon(lat: float, lon: float, height: float, parent: OrbitalBody):
@@ -125,7 +41,7 @@ def get_local_rotated_coordinates(Time_passed : float, coordinate : Vector, Actu
 
     Rotation_state_in_degrees = ((Rotation_speed_in_degrees_per_second * Time_passed) + Actual_Container.rotation_adjust) % 360
 
-    local_unrotated_coordinates = coordinate - Actual_Container.coord
+    local_unrotated_coordinates = coordinate - Actual_Container.coords
     return local_unrotated_coordinates.rotateZ(radians(-1*Rotation_state_in_degrees))
 
 
@@ -192,16 +108,16 @@ def get_sunset_sunrise_predictions(
     JulianDate : float):
     try :
         # Stanton X Y Z coordinates in refrence of the center of the system
-        sx, sy, sz = Star.coord
+        sx, sy, sz = Star.coords
 
         # Container X Y Z coordinates in refrence of the center of the system
-        bx, by, bz = Container.coord
+        bx, by, bz = Container.coords
 
         # Rotation speed of the container
         rotation_speed = Container.rotation_speed
 
         # Container qw/qx/qy/qz quaternion rotation
-        qw, qx, qy, qz = Container.rot
+        qw, qx, qy, qz = Container.rotation
 
         # Stanton X Y Z coordinates in refrence of the center of the container
         bsx = ((1-(2*qy**2)-(2*qz**2))*(sx-bx))+(((2*qx*qy)-(2*qz*qw))*(sy-by))+(((2*qx*qz)+(2*qy*qw))*(sz-bz))
