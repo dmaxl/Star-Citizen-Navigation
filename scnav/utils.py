@@ -7,15 +7,21 @@ from math import sqrt, degrees, radians, cos, acos, sin, asin, tan ,atan2, copys
 import sys
 
 from . import db
-from .types import *
+from .types import OrbitalBody, Vector
 
 logger = logging.getLogger(__name__)
 
 
 def get_local_vector_from_latlon(lat: float, lon: float, height: float, parent: OrbitalBody):
+    """Calculate the planet-fixed coordinates of a location given by latitude, longitude, and height.
+
+    Args:
+        lat: latitude (degrees, north positive)
+        lon: longitude (degrees, east positive)
+        height: height above body radius (km)
+    """
     lat_rad = radians(lat)
     lon_rad = radians(-1*lon)
-
     radial_dist = parent.body_radius + height
 
     return Vector(
@@ -32,43 +38,40 @@ def get_current_container(global_coordinate : Vector):
             Actual_Container = orbitalbody
     return Actual_Container
 
-
-def get_local_rotated_coordinates(Time_passed : float, coordinate : Vector, Actual_Container : OrbitalBody):
+def get_local_rotated_coordinates(Time_passed : float, global_coordinates : Vector, parent_body : OrbitalBody):
     try:
-        Rotation_speed_in_degrees_per_second = 0.1 * (1/Actual_Container.rotation_speed)
+        Rotation_speed_in_degrees_per_second = 0.1 * (1/parent_body.rotation_speed)
     except ZeroDivisionError:
         Rotation_speed_in_degrees_per_second = 0
 
-    Rotation_state_in_degrees = ((Rotation_speed_in_degrees_per_second * Time_passed) + Actual_Container.rotation_adjust) % 360
+    Rotation_state_in_degrees = ((Rotation_speed_in_degrees_per_second * Time_passed) + parent_body.rotation_adjust) % 360
 
-    local_unrotated_coordinates = coordinate - Actual_Container.coords
+    local_unrotated_coordinates = global_coordinates - parent_body.coords
     return local_unrotated_coordinates.rotateZ(radians(-1*Rotation_state_in_degrees))
 
-
-def get_lat_long_height(coordinate : Vector, Container : OrbitalBody):
-    Radius = Container.body_radius
-    Radial_Distance = coordinate.magnitude()
+def get_lat_long_height(local_coordinates : Vector, parent_body : OrbitalBody):
+    Radius = parent_body.body_radius
+    Radial_Distance = local_coordinates.magnitude()
     Height = Radial_Distance - Radius
 
     #Latitude
     try :
-        Latitude = degrees(asin(coordinate.z/Radial_Distance))
+        Latitude = degrees(asin(local_coordinates.z/Radial_Distance))
     except :
         Latitude = 0
 
     try :
-        Longitude = -1*degrees(atan2(coordinate.x, coordinate.y))
+        Longitude = -1*degrees(atan2(local_coordinates.x, local_coordinates.y))
     except :
         Longitude = 0
 
     return (Latitude, Longitude, Height)
 
-
-def get_closest_POI(coordinate : Vector, Container : OrbitalBody, Quantum_marker : bool = False):
+def get_closest_POI(local_coordinates : Vector, parent_body : OrbitalBody, Quantum_marker : bool = False):
     Distances_to_POIs = []
 
-    for name, POI in Container.pois.items():
-        Vector_POI = coordinate - POI.coord
+    for name, POI in parent_body.pois.items():
+        Vector_POI = local_coordinates - POI.coord
         Distance_POI = Vector_POI.magnitude()
 
         if Quantum_marker and POI.qtmarker or not Quantum_marker:
@@ -77,29 +80,25 @@ def get_closest_POI(coordinate : Vector, Container : OrbitalBody, Quantum_marker
     Target_to_POIs_Distances_Sorted = sorted(Distances_to_POIs, key=lambda k: k['Distance'])
     return Target_to_POIs_Distances_Sorted
 
-
-
-def get_closest_oms(coordinate : Vector, Container : OrbitalBody):
+def get_closest_oms(local_coordinates : Vector, parent_body : OrbitalBody):
     Closest_OM = {}
 
-    if coordinate.x >= 0:
-        Closest_OM["X"] = {"OM" : Container.pois["OM-5"], "Distance" : (coordinate - Container.pois['OM-5'].coord).magnitude()}
+    if local_coordinates.x >= 0:
+        Closest_OM["X"] = {"OM" : parent_body.pois["OM-5"], "Distance" : (local_coordinates - parent_body.pois['OM-5'].coord).magnitude()}
     else:
-        Closest_OM["X"] = {"OM" : Container.pois["OM-6"], "Distance" : (coordinate - Container.pois['OM-6'].coord).magnitude()}
+        Closest_OM["X"] = {"OM" : parent_body.pois["OM-6"], "Distance" : (local_coordinates - parent_body.pois['OM-6'].coord).magnitude()}
 
-    if coordinate.y >= 0:
-        Closest_OM["Y"] = {"OM" : Container.pois["OM-3"], "Distance" : (coordinate - Container.pois['OM-3'].coord).magnitude()}
+    if local_coordinates.y >= 0:
+        Closest_OM["Y"] = {"OM" : parent_body.pois["OM-3"], "Distance" : (local_coordinates - parent_body.pois['OM-3'].coord).magnitude()}
     else:
-        Closest_OM["Y"] = {"OM" : Container.pois["OM-4"], "Distance" : (coordinate - Container.pois['OM-4'].coord).magnitude()}
+        Closest_OM["Y"] = {"OM" : parent_body.pois["OM-4"], "Distance" : (local_coordinates - parent_body.pois['OM-4'].coord).magnitude()}
 
-    if coordinate.z >= 0:
-        Closest_OM["Z"] = {"OM" : Container.pois["OM-1"], "Distance" : (coordinate - Container.pois['OM-1'].coord).magnitude()}
+    if local_coordinates.z >= 0:
+        Closest_OM["Z"] = {"OM" : parent_body.pois["OM-1"], "Distance" : (local_coordinates - parent_body.pois['OM-1'].coord).magnitude()}
     else:
-        Closest_OM["Z"] = {"OM" : Container.pois["OM-2"], "Distance" : (coordinate - Container.pois['OM-2'].coord).magnitude()}
+        Closest_OM["Z"] = {"OM" : parent_body.pois["OM-2"], "Distance" : (local_coordinates - parent_body.pois['OM-2'].coord).magnitude()}
 
     return Closest_OM
-
-
 
 def get_sunset_sunrise_predictions(
     # X : float, Y : float, Z : float,
