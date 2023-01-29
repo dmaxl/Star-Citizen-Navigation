@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import csv
 import json
 import logging
 import os
+from pathlib import Path
 import pyperclip
 import sys
 import time
@@ -17,6 +19,9 @@ from .db import getDatabase, getSettings
 from .types import Location, Vector
 from .utils import get_local_coordinates_from_latlon
 
+
+LOG_DIR = Path('Logs')
+LOG_FILE = LOG_DIR / 'Logs.csv'
 
 logger = logging.getLogger(__name__)
 
@@ -168,76 +173,105 @@ def main():
         time_offset = 0
 
     if SETTINGS["logs_enabled"] == True:
-        if not os.path.isdir('Logs'):
-            os.mkdir('Logs')
+        if not LOG_DIR.is_dir():
+            os.mkdir(LOG_DIR)
+        new_log_file = not LOG_FILE.is_file()
+        csv_cm = open(LOG_FILE, 'a', newline='', buffering=1)
+    else:
+        csv_cm = contextlib.nullcontext()
 
-        if not os.path.isfile('Logs/Logs.csv'):
-            field = ['Key', 'System' ,'Global_X', 'Global_Y', 'Global_Z', 'Container', 'Local_X', 'Local_Y', 'Local_Z', 'Longitude', 'Latitude', 'Height', 'Time', 'Readable_Time', 'Player', 'Comment']
-            with open("Logs/Logs.csv","w+", newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow(field)
+    with csv_cm as csvfile:
+        # csvfile is either the file object from open
+        # or None if logs are disabled
+        if csvfile:
+            logwriter = csv.writer(csvfile)
 
-        New_run_field = ['New_Run']
-        with open(r'Logs/Logs.csv', 'a', newline='') as csv_file:
-            writer = csv.writer(csv_file)
-            writer.writerow(New_run_field)
+            if new_log_file:
+                # write field header if file is newly created
+                fields = ['Key', 'System' ,'Global_X', 'Global_Y', 'Global_Z', 'Container', 'Local_X', 'Local_Y', 'Local_Z', 'Longitude', 'Latitude', 'Height', 'Time', 'Readable_Time', 'Player', 'Comment']
+                logwriter.writerow(fields)
 
-    #Reset the clipboard content
-    pyperclip.copy("")
-    old_clipboard = ""
-
-    while True:
-        #Get the new clipboard content
-        new_clipboard = pyperclip.paste()
-
-        #If clipboard content hasn't changed
-        if new_clipboard == old_clipboard or new_clipboard == "":
-            #Wait some time
-            time.sleep(1/5)
-            continue
-
-        #If clipboard content has changed
-        #update the memory with the new content
-        old_clipboard = new_clipboard
-        new_time = time.time() + time_offset
-
-        if not new_clipboard.startswith("Coordinates:"):
-            continue
-
-        #If it contains some coordinates
-        #split the clipboard in sections
-        new_clipboard_splitted = new_clipboard.replace(":", " ").split(" ")
-
-        #get the 3 new XYZ coordinates
-        new_player_global_coordinates = Vector(
-            float(new_clipboard_splitted[3])/1000,
-            float(new_clipboard_splitted[5])/1000,
-            float(new_clipboard_splitted[7])/1000
-        )
-
-        # for debugging with saved data, manually specify the time
-        if len(new_clipboard_splitted) == 10:
-            new_time = float(new_clipboard_splitted[9])
-
-        #-----------------------------------------------------planetary_nav--------------------------------------------------------------
-        # If the target is within the attraction of a planet
-        if args.mode == "planetary_nav":
-            new_data = compute_planetary_nav(new_player_global_coordinates, Target, new_time)
-            print("New data :", json.dumps(new_data), flush=True)
-
-        #-----------------------------------------------------space_nav------------------------------------------------------------------
-        #If the target is within the attraction of a planet
-        elif args.mode == "space_nav":
-            new_data = compute_space_nav(new_player_global_coordinates, Target, new_time)
-            print("New data :", json.dumps(new_data), flush=True)
-
-        #-----------------------------------------------------companion------------------------------------------------------------------
-        elif args.mode == "companion":
-            new_data = compute_companion(new_player_global_coordinates, new_time)
-            print("New data :", json.dumps(new_data), flush=True)
-
+            # write new run marker to log file
+            New_run_field = ['New_Run']
+            logwriter.writerow(New_run_field)
         else:
-            raise NotImplementedError("Mode not implemented")
+            logwriter = None
+
+        #Reset the clipboard content
+        pyperclip.copy("")
+        old_clipboard = ""
+
+        while True:
+            #Get the new clipboard content
+            new_clipboard = pyperclip.paste()
+
+            #If clipboard content hasn't changed
+            if new_clipboard == old_clipboard or new_clipboard == "":
+                #Wait some time
+                time.sleep(1/5)
+                continue
+
+            #If clipboard content has changed
+            #update the memory with the new content
+            old_clipboard = new_clipboard
+            new_time = time.time() + time_offset
+
+            if not new_clipboard.startswith("Coordinates:"):
+                continue
+
+            #If it contains some coordinates
+            #split the clipboard in sections
+            new_clipboard_splitted = new_clipboard.replace(":", " ").split(" ")
+
+            #get the 3 new XYZ coordinates
+            new_player_global_coordinates = Vector(
+                float(new_clipboard_splitted[3])/1000,
+                float(new_clipboard_splitted[5])/1000,
+                float(new_clipboard_splitted[7])/1000
+            )
+
+            # for debugging with saved data, manually specify the time
+            if len(new_clipboard_splitted) == 10:
+                new_time = float(new_clipboard_splitted[9])
+
+            #-----------------------------------------------------planetary_nav--------------------------------------------------------------
+            # If the target is within the attraction of a planet
+            if args.mode == "planetary_nav":
+                new_data = compute_planetary_nav(new_player_global_coordinates, Target, new_time)
+                print("New data :", json.dumps(new_data), flush=True)
+
+                if logwriter:
+                    fields = [
+                        None,
+                        'Stanton',
+                        new_player_global_coordinates.x * 1000,
+                        new_player_global_coordinates.y * 1000,
+                        new_player_global_coordinates.z * 1000,
+                        new_data['player_actual_container'],
+                        new_data['player_x'], new_data['player_y'], new_data['player_z'],
+                        new_data['player_long'][:-1],
+                        new_data['player_lat'][:-1],
+                        new_data['player_height'][:-3],
+                        new_time,
+                        time.strftime('%d %b %Y %H:%M:%S', time.gmtime(new_time)),
+                        "",
+                        ""
+                    ]
+                    logwriter.writerow(fields)
+
+            #-----------------------------------------------------space_nav------------------------------------------------------------------
+            #If the target is within the attraction of a planet
+            elif args.mode == "space_nav":
+                new_data = compute_space_nav(new_player_global_coordinates, Target, new_time)
+                print("New data :", json.dumps(new_data), flush=True)
+
+            #-----------------------------------------------------companion------------------------------------------------------------------
+            elif args.mode == "companion":
+                new_data = compute_companion(new_player_global_coordinates, new_time)
+                print("New data :", json.dumps(new_data), flush=True)
+
+            else:
+                raise NotImplementedError("Mode not implemented")
 
 
 if __name__ == '__main__':
