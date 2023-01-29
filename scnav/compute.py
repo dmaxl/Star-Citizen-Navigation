@@ -1,75 +1,74 @@
 from __future__ import annotations
 
 import datetime
-from math import sqrt, degrees, radians, cos, acos, sin, asin, tan ,atan2, copysign, pi
+from math import degrees, radians, cos, sin, atan2
 import time
 
 from .db import getDatabase
-from .types import Location, OrbitalBody, Vector
+from .types import Location, Vector
 from .utils import get_local_rotated_coordinates, get_lat_long_height, get_closest_POI, get_closest_oms, get_sunset_sunrise_predictions
 
 
 DATABASE = getDatabase()
 
-Reference_time_UTC = datetime.datetime(2020, 1, 1)
-Epoch = datetime.datetime(1970, 1, 1)
-Reference_time = (Reference_time_UTC - Epoch).total_seconds()
+STAR_CITIZEN_REF_TIME_UTC = datetime.datetime(2020, 1, 1)
+EPOCH = datetime.datetime(1970, 1, 1)
+STAR_CITIZEN_REF_SECONDS = (STAR_CITIZEN_REF_TIME_UTC - EPOCH).total_seconds()
 
-Old_player_Global_coordinates = Vector(0, 0, 0)
-Old_player_local_rotated_coordinates = Vector(0, 0, 0)
-Old_Distance_to_POI = Vector(0, 0, 0)
-Old_container = None
-Old_time = time.time()
+_old_player_Global_coordinates = Vector(0, 0, 0)
+_old_player_local_rotated_coordinates = Vector(0, 0, 0)
+_old_Distance_to_POI = Vector(0, 0, 0)
+_old_container = None
+_old_time = time.time()
 
 
 def get_current_container(global_coordinate : Vector):
     for name, orbitalbody in DATABASE["Containers"].items():
         relative_vector = orbitalbody.coords - global_coordinate
         if relative_vector.magnitude() <= 3 * orbitalbody.om_radius:
-            Actual_Container = orbitalbody
-    return Actual_Container
+            return orbitalbody
+    return None
 
-def compute_planetary_nav(New_Player_Global_coordinates: Vector, Target: Location, timestamp: float):
-
-    global Old_player_Global_coordinates
-    global Old_player_local_rotated_coordinates
-    global Old_Distance_to_POI
-    global Old_container
-    global Old_time
+def compute_planetary_nav(player_global_coordinates: Vector, target: Location, timestamp: float):
+    global _old_player_Global_coordinates
+    global _old_player_local_rotated_coordinates
+    global _old_Distance_to_POI
+    global _old_container
+    global _old_time
 
     #Time passed since the start of game simulation
-    Time_passed_since_reference_in_seconds = timestamp - Reference_time
+    Time_passed_since_reference_in_seconds = timestamp - STAR_CITIZEN_REF_SECONDS
 
     #---------------------------------------------------Actual Container----------------------------------------------------------------
     #search in the Databse to see if the player is ina Container
-    Actual_Container = get_current_container(New_Player_Global_coordinates)
+    actual_container = get_current_container(player_global_coordinates)
 
 
     #---------------------------------------------------New player local coordinates----------------------------------------------------
-    New_player_local_rotated_coordinates = get_local_rotated_coordinates(Time_passed_since_reference_in_seconds, New_Player_Global_coordinates, Actual_Container)
+    player_local_rotated_coordinates = get_local_rotated_coordinates(Time_passed_since_reference_in_seconds, player_global_coordinates, actual_container)
 
 
     #---------------------------------------------------New target local coordinates----------------------------------------------------
     #Get the actual rotation tate in degrees using the rotation speed of the container, the actual time and a rotational adjustment value
-    target_Rotation_state_in_degrees = DATABASE["Containers"][Target.parent].rotation_at_time(Time_passed_since_reference_in_seconds)
+    target_Rotation_state_in_degrees = DATABASE["Containers"][target.parent].rotation_at_time(Time_passed_since_reference_in_seconds)
 
     #get the new player rotated coordinates
-    target_rotated_coordinates = Target.coords.rotateZ(radians(target_Rotation_state_in_degrees))
+    target_rotated_coordinates = target.coords.rotateZ(radians(target_Rotation_state_in_degrees))
 
 
     #-------------------------------------------------player local Long Lat Height--------------------------------------------------
-    if Actual_Container.name != "None":
-        player_Latitude, player_Longitude, player_Height = get_lat_long_height(New_player_local_rotated_coordinates, Actual_Container)
+    if actual_container.name != "None":
+        player_Latitude, player_Longitude, player_Height = get_lat_long_height(player_local_rotated_coordinates, actual_container)
 
     #-------------------------------------------------target local Long Lat Height--------------------------------------------------
-    target_Latitude, target_Longitude, target_Height = get_lat_long_height(Target.coords, DATABASE["Containers"][Target.parent])
+    target_Latitude, target_Longitude, target_Height = get_lat_long_height(target.coords, DATABASE["Containers"][target.parent])
 
 
     #---------------------------------------------------Distance to POI-----------------------------------------------------------------
-    if Actual_Container == Target.parent:
-        New_Distance_to_POI = Target.coords - New_player_local_rotated_coordinates
+    if actual_container == target.parent:
+        New_Distance_to_POI = target.coords - player_local_rotated_coordinates
     else:
-        New_Distance_to_POI = target_rotated_coordinates + DATABASE["Containers"][Target.parent].coords - New_Player_Global_coordinates
+        New_Distance_to_POI = target_rotated_coordinates + DATABASE["Containers"][target.parent].coords - player_global_coordinates
 
     #get the real new distance between the player and the target
     New_Distance_to_POI_Total = New_Distance_to_POI.magnitude()
@@ -84,7 +83,7 @@ def compute_planetary_nav(New_Player_Global_coordinates: Vector, Target: Locatio
 
     #---------------------------------------------------Delta Distance to POI-----------------------------------------------------------
     #get the real distance travelled since last update
-    Delta_Distance_to_POI_Total = New_Distance_to_POI_Total - Old_Distance_to_POI.magnitude()
+    Delta_Distance_to_POI_Total = New_Distance_to_POI_Total - _old_Distance_to_POI.magnitude()
 
     if Delta_Distance_to_POI_Total <= 0:
         Delta_distance_to_poi_color = "#00ff00"
@@ -94,7 +93,7 @@ def compute_planetary_nav(New_Player_Global_coordinates: Vector, Target: Locatio
 
     #---------------------------------------------------Estimated time of arrival to POI------------------------------------------------
     #get the time between the last update and this update
-    Delta_time = timestamp - Old_time
+    Delta_time = timestamp - _old_time
 
     #get the time it would take to reach destination using the same speed
     try :
@@ -104,8 +103,8 @@ def compute_planetary_nav(New_Player_Global_coordinates: Vector, Target: Locatio
 
 
     #----------------------------------------------------Closest Quantumable POI--------------------------------------------------------
-    if not Target.qtmarker:
-        Target_to_POIs_Distances_Sorted = get_closest_POI(Target.coords, DATABASE["Containers"][Target.parent], True)
+    if not target.qtmarker:
+        Target_to_POIs_Distances_Sorted = get_closest_POI(target.coords, DATABASE["Containers"][target.parent], True)
     else:
         Target_to_POIs_Distances_Sorted = [{
             "Name" : "POI itself",
@@ -114,23 +113,23 @@ def compute_planetary_nav(New_Player_Global_coordinates: Vector, Target: Locatio
 
 
     #----------------------------------------------------Player Closest POI--------------------------------------------------------
-    Player_to_POIs_Distances_Sorted = get_closest_POI(New_player_local_rotated_coordinates, Actual_Container, False)
+    Player_to_POIs_Distances_Sorted = get_closest_POI(player_local_rotated_coordinates, actual_container, False)
 
 
     #-------------------------------------------------------3 Closest OMs to player---------------------------------------------------------------
-    player_Closest_OM = get_closest_oms(New_player_local_rotated_coordinates, Actual_Container)
+    player_Closest_OM = get_closest_oms(player_local_rotated_coordinates, actual_container)
 
 
     #-------------------------------------------------------3 Closest OMs to target---------------------------------------------------------------
-    target_Closest_OM = get_closest_oms(Target.coords, DATABASE["Containers"][Target.parent])
+    target_Closest_OM = get_closest_oms(target.coords, DATABASE["Containers"][target.parent])
 
 
     #----------------------------------------------------Course Deviation to POI--------------------------------------------------------
     #get the vector between current_pos and previous_pos
-    Previous_current_pos_vector = New_player_local_rotated_coordinates - Old_player_local_rotated_coordinates
+    Previous_current_pos_vector = player_local_rotated_coordinates - _old_player_local_rotated_coordinates
 
     #get the vector between current_pos and target_pos
-    Current_target_pos_vector = Target.coords - New_player_local_rotated_coordinates
+    Current_target_pos_vector = target.coords - player_local_rotated_coordinates
 
     #get the angle between the current-target_pos vector and the previous-current_pos vector
     Total_deviation_from_target = degrees(Previous_current_pos_vector.angle_between(Current_target_pos_vector))
@@ -145,16 +144,16 @@ def compute_planetary_nav(New_Player_Global_coordinates: Vector, Target: Locatio
 
     #----------------------------------------------------------Flat_angle--------------------------------------------------------------
     #Vector AB (Previous -> Current)
-    previous_to_current = New_player_local_rotated_coordinates - Old_player_local_rotated_coordinates
+    previous_to_current = player_local_rotated_coordinates - _old_player_local_rotated_coordinates
 
     #Vector AC (C = center of the planet, Previous -> Center)
-    previous_to_center = Vector(0, 0, 0) - Old_player_local_rotated_coordinates
+    previous_to_center = Vector(0, 0, 0) - _old_player_local_rotated_coordinates
 
     #Vector BD (Current -> Target)
-    current_to_target = Target.coords - New_player_local_rotated_coordinates
+    current_to_target = target.coords - player_local_rotated_coordinates
 
     #Vector BC (C = center of the planet, Current -> Center)
-    current_to_center = Vector(0, 0, 0) - New_player_local_rotated_coordinates
+    current_to_center = Vector(0, 0, 0) - player_local_rotated_coordinates
 
 
     #Normal vector of a plane:
@@ -188,7 +187,7 @@ def compute_planetary_nav(New_Player_Global_coordinates: Vector, Target: Locatio
         player_Latitude,
         player_Longitude,
         player_Height,
-        Actual_Container,
+        actual_container,
         DATABASE["Containers"]["Stanton"],
         JulianDate
     )
@@ -197,29 +196,28 @@ def compute_planetary_nav(New_Player_Global_coordinates: Vector, Target: Locatio
         target_Latitude,
         target_Longitude,
         target_Height,
-        DATABASE["Containers"][Target.parent],
+        DATABASE["Containers"][target.parent],
         DATABASE["Containers"]["Stanton"],
         JulianDate
     )
 
+
     #---------------------------------------------------Update coordinates for the next update------------------------------------------
-    Old_player_Global_coordinates = New_Player_Global_coordinates
+    _old_player_Global_coordinates = player_global_coordinates
+    _old_player_local_rotated_coordinates = player_local_rotated_coordinates
+    _old_Distance_to_POI = New_Distance_to_POI
+    _old_container = actual_container
+    _old_time = timestamp
 
-    Old_player_local_rotated_coordinates = New_player_local_rotated_coordinates
 
-    Old_Distance_to_POI = New_Distance_to_POI
-
-    Old_time = timestamp
-
-    #------------------------------------------------------------Backend to Frontend------------------------------------------------------------
     return {
         "updated" : f"{time.strftime('%H:%M:%S', time.localtime(timestamp))}",
-        "target" : Target.name,
-        "player_actual_container" : Actual_Container.name,
-        "target_container" : Target.parent,
-        "player_x" : round(New_player_local_rotated_coordinates.x, 3),
-        "player_y" : round(New_player_local_rotated_coordinates.y, 3),
-        "player_z" : round(New_player_local_rotated_coordinates.z, 3),
+        "target" : target.name,
+        "player_actual_container" : actual_container.name,
+        "target_container" : target.parent,
+        "player_x" : round(player_local_rotated_coordinates.x, 3),
+        "player_y" : round(player_local_rotated_coordinates.y, 3),
+        "player_z" : round(player_local_rotated_coordinates.z, 3),
         "player_long" : f"{round(player_Longitude, 2)}°",
         "player_lat" : f"{round(player_Latitude, 2)}°",
         "player_height" : f"{round(player_Height, 1)} km",
@@ -230,9 +228,9 @@ def compute_planetary_nav(New_Player_Global_coordinates: Vector, Target: Locatio
         "player_state_of_the_day" : f"{player_state_of_the_day}",
         "player_next_event" : f"{player_next_event}",
         "player_next_event_time" : f"{time.strftime('%H:%M:%S', time.localtime(timestamp + player_next_event_time*60))}",
-        "target_x" : Target.coords.x,
-        "target_y" : Target.coords.y,
-        "target_z" : Target.coords.z,
+        "target_x" : target.coords.x,
+        "target_y" : target.coords.y,
+        "target_z" : target.coords.z,
         "target_long" : f"{round(target_Longitude, 2)}°",
         "target_lat" : f"{round(target_Latitude, 2)}°",
         "target_height" : f"{round(target_Height, 1)} km",
@@ -254,3 +252,160 @@ def compute_planetary_nav(New_Player_Global_coordinates: Vector, Target: Locatio
         "heading" : f"{round(Bearing, 1)}°",
         "ETA" : f"{str(datetime.timedelta(seconds=round(Estimated_time_of_arrival, 0)))}"
     }
+
+def compute_space_nav(player_global_coordinates: Vector, target: Location, timestamp: float):
+    global _old_player_Global_coordinates
+    global _old_player_local_rotated_coordinates
+    global _old_Distance_to_POI
+    global _old_container
+    global _old_time
+
+    #-----------------------------------------------------Distance to POI---------------------------------------------------------------
+    New_Distance_to_POI = target.coords - player_global_coordinates
+
+    #get the real new distance between the player and the target
+    New_Distance_to_POI_Total = New_Distance_to_POI.magnitude()
+
+    if New_Distance_to_POI_Total <= 100:
+        New_Distance_to_POI_Total_color = "#00ff00"
+    elif New_Distance_to_POI_Total <= 1000:
+        New_Distance_to_POI_Total_color = "#ffd000"
+    else :
+        New_Distance_to_POI_Total_color = "#ff3700"
+
+
+    #---------------------------------------------------Delta Distance to POI-----------------------------------------------------------
+    #get the real distance travelled since last update
+    Delta_Distance_to_POI_Total = New_Distance_to_POI_Total - _old_Distance_to_POI.magnitude()
+
+    if Delta_Distance_to_POI_Total <= 0:
+        Delta_distance_to_poi_color = "#00ff00"
+    else:
+        Delta_distance_to_poi_color = "#ff3700"
+
+
+    #-----------------------------------------------Estimated time of arrival-----------------------------------------------------------
+    #get the time between the last update and this update
+    Delta_time = timestamp - _old_time
+
+    #get the time it would take to reach destination using the same speed
+    try :
+        Estimated_time_of_arrival = (Delta_time*New_Distance_to_POI_Total)/abs(Delta_Distance_to_POI_Total)
+    except ZeroDivisionError:
+        Estimated_time_of_arrival = 0.00
+
+
+    #----------------------------------------------------Course Deviation---------------------------------------------------------------
+    #get the vector between current_pos and previous_pos
+    Previous_current_pos_vector = player_global_coordinates - _old_player_Global_coordinates
+
+    #get the vector between current_pos and target_pos
+    Current_target_pos_vector = target.coords - player_global_coordinates
+
+    #get the angle between the current-target_pos vector and the previous-current_pos vector
+    Course_Deviation = degrees(Previous_current_pos_vector.angle_between(Current_target_pos_vector))
+
+    if Course_Deviation <= 10:
+        Total_deviation_from_target_color = "#00ff00"
+    elif Course_Deviation <= 20:
+        Total_deviation_from_target_color = "#ffd000"
+    else:
+        Total_deviation_from_target_color = "#ff3700"
+
+
+    #-------------------------------------------Update coordinates for the next update--------------------------------------------------
+    _old_player_Global_coordinates = player_global_coordinates
+    _old_Distance_to_POI = New_Distance_to_POI
+    _old_time = timestamp
+
+
+    return {
+        "updated" : f"Updated : {time.strftime('%H:%M:%S', time.localtime(timestamp))}",
+        "target" : target['Name'],
+        "player_x" : round(player_global_coordinates.x, 3),
+        "player_y" : round(player_global_coordinates.y, 3),
+        "player_z" : round(player_global_coordinates.z, 3),
+        "target_x" : round(target.coords.x, 3),
+        "target_y" : round(target.coords.y, 3),
+        "target_z" : round(target.coords.z, 3),
+        "distance_to_poi" : f"{round(New_Distance_to_POI_Total, 3)} km",
+        "distance_to_poi_color" : New_Distance_to_POI_Total_color,
+        "delta_distance_to_poi" : f"{round(abs(Delta_Distance_to_POI_Total), 3)} km",
+        "delta_distance_to_poi_color" : Delta_distance_to_poi_color,
+        "total_deviation" : f"{round(Course_Deviation, 1)}°",
+        "total_deviation_color" : Total_deviation_from_target_color,
+        "ETA" : f"{str(datetime.timedelta(seconds=round(Estimated_time_of_arrival, 0)))}"
+    }
+
+def compute_companion(player_global_coordinates: Vector, timestamp: float):
+    global _old_player_Global_coordinates
+    global _old_player_local_rotated_coordinates
+    global _old_Distance_to_POI
+    global _old_container
+    global _old_time
+
+    Actual_Container = get_current_container(player_global_coordinates)
+
+    data = {
+        "updated" : f"Updated : {time.strftime('%H:%M:%S', time.localtime(timestamp))}",
+        "player_global_x" : f"Global X : {round(player_global_coordinates.x, 3)}",
+        "player_global_y" : f"Global Y : {round(player_global_coordinates.y, 3)}",
+        "player_global_z" : f"Global Z : {round(player_global_coordinates.z, 3)}",
+    }
+
+    if Actual_Container is None:
+        Distance_since_last_update = _old_player_Global_coordinates - player_global_coordinates
+        data.update({
+            "distance_change" : f"Distance since last update : {round(Distance_since_last_update.magnitude(), 3)} km",
+            "actual_container" : "None",
+            "player_local_x" : "",
+            "player_local_y" : "",
+            "player_local_z" : "",
+            "player_long" : "",
+            "player_lat" : "",
+            "player_height" : "",
+            "player_OM1" : "",
+            "player_OM2" : "",
+            "player_OM3" : "",
+            "closest_poi" : ""
+        })
+    else:
+        Time_passed_since_reference_in_seconds = timestamp - STAR_CITIZEN_REF_SECONDS
+        New_player_local_rotated_coordinates = get_local_rotated_coordinates(Time_passed_since_reference_in_seconds, player_global_coordinates, Actual_Container)
+
+        if Actual_Container == _old_container:
+            Distance_since_last_update = _old_player_local_rotated_coordinates - New_player_local_rotated_coordinates
+        else:
+            Distance_since_last_update = _old_player_Global_coordinates - player_global_coordinates
+
+        # Lattitude, Longitude, Height
+        Latitude, Longitude, Height = get_lat_long_height(New_player_local_rotated_coordinates, Actual_Container)
+
+        # 3 closest OMs
+        Closest_OM = get_closest_oms(New_player_local_rotated_coordinates, Actual_Container)
+
+        # 2 Closest POIs
+        Player_to_POIs_Distances_Sorted = get_closest_POI(New_player_local_rotated_coordinates, Actual_Container, False)
+
+        data.update({
+            "distance_change" : f"Distance since last update : {round(Distance_since_last_update.magnitude(), 3)} km",
+            "actual_container" : f"Actual Container : {Actual_Container['Name']}",
+            "player_local_x" : f"Local X : {round(New_player_local_rotated_coordinates.x, 3)}",
+            "player_local_y" : f"Local Y : {round(New_player_local_rotated_coordinates.y, 3)}",
+            "player_local_z" : f"Local Z : {round(New_player_local_rotated_coordinates.z, 3)}",
+            "player_long" : f"Longitude : {round(Longitude, 2)}°",
+            "player_lat" : f"Latitude : {round(Latitude, 2)}°",
+            "player_height" : f"Height : {round(Height, 1)} km",
+            "player_OM1" : f"{Closest_OM['Z']['OM']['Name']} : {round(Closest_OM['Z']['Distance'], 3)} km",
+            "player_OM2" : f"{Closest_OM['Y']['OM']['Name']} : {round(Closest_OM['Y']['Distance'], 3)} km",
+            "player_OM3" : f"{Closest_OM['X']['OM']['Name']} : {round(Closest_OM['X']['Distance'], 3)} km",
+            "closest_poi" : f"Closest POI : \n{Player_to_POIs_Distances_Sorted[0]['Name']} ({round(Player_to_POIs_Distances_Sorted[0]['Distance'], 3)} km) \n{Player_to_POIs_Distances_Sorted[1]['Name']} ({round(Player_to_POIs_Distances_Sorted[1]['Distance'], 3)} km)",
+        })
+
+        _old_player_local_rotated_coordinates = New_player_local_rotated_coordinates
+
+    _old_player_Global_coordinates = player_global_coordinates
+    _old_container = Actual_Container
+    _old_time = timestamp
+
+    return data
