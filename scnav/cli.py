@@ -238,37 +238,40 @@ def main():
             # If the target is within the attraction of a planet
             if args.mode == "planetary_nav":
                 new_data = compute_planetary_nav(new_player_global_coordinates, Target, new_time)
-                print("New data :", json.dumps(new_data), flush=True)
+                if new_data is not None:
+                    print("New data :", json.dumps(new_data), flush=True)
 
-                if logwriter:
-                    fields = [
-                        None,
-                        'Stanton',
-                        new_player_global_coordinates.x * 1000,
-                        new_player_global_coordinates.y * 1000,
-                        new_player_global_coordinates.z * 1000,
-                        new_data['player_actual_container'],
-                        new_data['player_x'], new_data['player_y'], new_data['player_z'],
-                        new_data['player_long'][:-1],
-                        new_data['player_lat'][:-1],
-                        new_data['player_height'][:-3],
-                        new_time,
-                        time.strftime('%d %b %Y %H:%M:%S', time.gmtime(new_time)),
-                        "",
-                        ""
-                    ]
-                    logwriter.writerow(fields)
+                    if logwriter:
+                        fields = [
+                            None,
+                            'Stanton',
+                            new_player_global_coordinates.x * 1000,
+                            new_player_global_coordinates.y * 1000,
+                            new_player_global_coordinates.z * 1000,
+                            new_data['player_actual_container'],
+                            new_data['player_x'], new_data['player_y'], new_data['player_z'],
+                            new_data['player_long'][:-1],
+                            new_data['player_lat'][:-1],
+                            new_data['player_height'][:-3],
+                            new_time,
+                            time.strftime('%d %b %Y %H:%M:%S', time.gmtime(new_time)),
+                            "",
+                            ""
+                        ]
+                        logwriter.writerow(fields)
 
             #-----------------------------------------------------space_nav------------------------------------------------------------------
             #If the target is within the attraction of a planet
             elif args.mode == "space_nav":
                 new_data = compute_space_nav(new_player_global_coordinates, Target, new_time)
-                print("New data :", json.dumps(new_data), flush=True)
+                if new_data is not None:
+                    print("New data :", json.dumps(new_data), flush=True)
 
             #-----------------------------------------------------companion------------------------------------------------------------------
             elif args.mode == "companion":
                 new_data = compute_companion(new_player_global_coordinates, new_time)
-                print("New data :", json.dumps(new_data), flush=True)
+                if new_data is not None:
+                    print("New data :", json.dumps(new_data), flush=True)
 
             else:
                 raise NotImplementedError("Mode not implemented")

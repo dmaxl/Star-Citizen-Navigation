@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import logging
 from math import degrees, radians, cos, sin, atan2
 import time
 
@@ -20,6 +21,8 @@ _old_player_local_rotated_coordinates = Vector(0, 0, 0)
 _old_Distance_to_POI = Vector(0, 0, 0)
 _old_container = None
 _old_time = time.time()
+
+logger = logging.getLogger(__name__)
 
 
 def get_current_container(global_coordinate : Vector):
@@ -43,10 +46,16 @@ def compute_planetary_nav(player_global_coordinates: Vector, target: Location, t
     #search in the Databse to see if the player is ina Container
     actual_container = get_current_container(player_global_coordinates)
 
+    if actual_container is None:
+        logger.error("Player not in sphere of influence of an orbital body. Planetary navigation not possible.")
+        return None
+    elif actual_container.name != target.parent:
+        logger.error("Player not in same sphere of influence as target. Planetary navigation not possible.")
+        return None
+
 
     #---------------------------------------------------New player local coordinates----------------------------------------------------
-    if actual_container is not None:
-        player_local_rotated_coordinates = get_local_rotated_coordinates(Time_passed_since_reference_in_seconds, player_global_coordinates, actual_container)
+    player_local_rotated_coordinates = get_local_rotated_coordinates(Time_passed_since_reference_in_seconds, player_global_coordinates, actual_container)
 
 
     #---------------------------------------------------New target local coordinates----------------------------------------------------
@@ -58,18 +67,17 @@ def compute_planetary_nav(player_global_coordinates: Vector, target: Location, t
 
 
     #-------------------------------------------------player local Long Lat Height--------------------------------------------------
-    if actual_container is not None:
-        player_Latitude, player_Longitude, player_Height = get_lat_long_height(player_local_rotated_coordinates, actual_container)
+    player_Latitude, player_Longitude, player_Height = get_lat_long_height(player_local_rotated_coordinates, actual_container)
 
     #-------------------------------------------------target local Long Lat Height--------------------------------------------------
     target_Latitude, target_Longitude, target_Height = get_lat_long_height(target.coords, DATABASE["Containers"][target.parent])
 
 
     #---------------------------------------------------Distance to POI-----------------------------------------------------------------
-    if actual_container == target.parent:
-        New_Distance_to_POI = target.coords - player_local_rotated_coordinates
-    else:
-        New_Distance_to_POI = target_rotated_coordinates + DATABASE["Containers"][target.parent].coords - player_global_coordinates
+    # if actual_container.name == target.parent:
+    New_Distance_to_POI = target.coords - player_local_rotated_coordinates
+    # else:
+        # New_Distance_to_POI = target_rotated_coordinates + DATABASE["Containers"][target.parent].coords - player_global_coordinates
 
     #get the real new distance between the player and the target
     New_Distance_to_POI_Total = New_Distance_to_POI.magnitude()
