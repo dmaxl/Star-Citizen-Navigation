@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import acos, cos, sin, sqrt
-from typing import NamedTuple
+from typing import NamedTuple, Mapping
 
 
 class Vector(NamedTuple):
@@ -69,9 +69,9 @@ class Vector(NamedTuple):
 
 class Quaternion(NamedTuple):
     w: float
-    i: float
-    j: float
-    k: float
+    x: float
+    y: float
+    z: float
 
 
 @dataclass(frozen=True)
@@ -89,10 +89,11 @@ class OrbitalBody(Location):
     body_radius: float      # km
     arrival_radius: float   # km
     time_lines: float
-    rotation_speed: float
-    rotation_adjust: float
-    orbital_radius: float
+    rotation_speed: float   # hours per rotation
+    rotation_adjust: float  # rotation about Z axis to match in-game orientation
+    orbital_radius: float   # km
     orbital_speed: float
     orbital_angle: float
     grid_radius: float
-    pois: dict
+    adjustment_date: float  # date corresponding to the rotation_adjust value
+    pois: Mapping[str, Location]
