@@ -45,7 +45,8 @@ def compute_planetary_nav(player_global_coordinates: Vector, target: Location, t
 
 
     #---------------------------------------------------New player local coordinates----------------------------------------------------
-    player_local_rotated_coordinates = get_local_rotated_coordinates(Time_passed_since_reference_in_seconds, player_global_coordinates, actual_container)
+    if actual_container is not None:
+        player_local_rotated_coordinates = get_local_rotated_coordinates(Time_passed_since_reference_in_seconds, player_global_coordinates, actual_container)
 
 
     #---------------------------------------------------New target local coordinates----------------------------------------------------
@@ -57,7 +58,7 @@ def compute_planetary_nav(player_global_coordinates: Vector, target: Location, t
 
 
     #-------------------------------------------------player local Long Lat Height--------------------------------------------------
-    if actual_container.name != "None":
+    if actual_container is not None:
         player_Latitude, player_Longitude, player_Height = get_lat_long_height(player_local_rotated_coordinates, actual_container)
 
     #-------------------------------------------------target local Long Lat Height--------------------------------------------------
@@ -321,7 +322,7 @@ def compute_space_nav(player_global_coordinates: Vector, target: Location, times
 
     return {
         "updated" : f"Updated : {time.strftime('%H:%M:%S', time.localtime(timestamp))}",
-        "target" : target['Name'],
+        "target" : target.name,
         "player_x" : round(player_global_coordinates.x, 3),
         "player_y" : round(player_global_coordinates.y, 3),
         "player_z" : round(player_global_coordinates.z, 3),
@@ -389,16 +390,16 @@ def compute_companion(player_global_coordinates: Vector, timestamp: float):
 
         data.update({
             "distance_change" : f"Distance since last update : {round(Distance_since_last_update.magnitude(), 3)} km",
-            "actual_container" : f"Actual Container : {Actual_Container['Name']}",
+            "actual_container" : f"Actual Container : {Actual_Container.name}",
             "player_local_x" : f"Local X : {round(New_player_local_rotated_coordinates.x, 3)}",
             "player_local_y" : f"Local Y : {round(New_player_local_rotated_coordinates.y, 3)}",
             "player_local_z" : f"Local Z : {round(New_player_local_rotated_coordinates.z, 3)}",
             "player_long" : f"Longitude : {round(Longitude, 2)}°",
             "player_lat" : f"Latitude : {round(Latitude, 2)}°",
             "player_height" : f"Height : {round(Height, 1)} km",
-            "player_OM1" : f"{Closest_OM['Z']['OM']['Name']} : {round(Closest_OM['Z']['Distance'], 3)} km",
-            "player_OM2" : f"{Closest_OM['Y']['OM']['Name']} : {round(Closest_OM['Y']['Distance'], 3)} km",
-            "player_OM3" : f"{Closest_OM['X']['OM']['Name']} : {round(Closest_OM['X']['Distance'], 3)} km",
+            "player_OM1" : f"{Closest_OM['Z']['OM'].name} : {round(Closest_OM['Z']['Distance'], 3)} km",
+            "player_OM2" : f"{Closest_OM['Y']['OM'].name} : {round(Closest_OM['Y']['Distance'], 3)} km",
+            "player_OM3" : f"{Closest_OM['X']['OM'].name} : {round(Closest_OM['X']['Distance'], 3)} km",
             "closest_poi" : f"Closest POI : \n{Player_to_POIs_Distances_Sorted[0]['Name']} ({round(Player_to_POIs_Distances_Sorted[0]['Distance'], 3)} km) \n{Player_to_POIs_Distances_Sorted[1]['Name']} ({round(Player_to_POIs_Distances_Sorted[1]['Distance'], 3)} km)",
         })
 
