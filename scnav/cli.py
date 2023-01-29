@@ -34,6 +34,10 @@ def str_true_false(s):
     else:
         return ValueError(f"Expected true or false, not '{s}'")
 
+def usage_error(msg, code=2):
+    print(msg, file=sys.stderr)
+    sys.exit(code)
+
 def main():
     SETTINGS = getSettings()
     DATABASE = getDatabase()
@@ -70,28 +74,23 @@ def main():
 
     if args.mode == "planetary_nav":
         if args.container is None:
-            parser.print_usage("--container required for planetary_nav", file=sys.stderr)
-            sys.exit(2)
+            usage_error("--container required for planetary_nav")
 
         if not args.container in DATABASE['Containers']:
-            print(f"Unknown container: '{args.container}'", file=sys.stderr)
-            sys.exit(2)
+            usage_error(f"Unknown container: '{args.container}'")
 
         if args.known:
             if args.target is None:
-                parser.print_usage("--target required for known target", file=sys.stderr)
-                sys.exit(2)
+                usage_error("--target required for known target")
 
             if not args.target in DATABASE["Containers"][args.container].pois:
-                print(f"Unknown target '{args.target}' for container '{args.container}'", file=sys.stderr)
-                sys.exit(2)
+                usage_error(f"Unknown target '{args.target}' for container '{args.container}'")
 
             Target = DATABASE["Containers"][args.container].pois[args.target]
         else :
             if args.entry_type == "xyz":
                 if args.x is None or args.y is None or args.z is None:
-                    parser.print_usage("X Y and Z coordinates required", file=sys.stderr)
-                    sys.exit(2)
+                    usage_error("X Y and Z coordinates required")
 
                 Target = Location('Custom POI', args.container, Vector(args.x, args.y, args.z), None, False)
 
@@ -108,8 +107,7 @@ def main():
 
             else:
                 if args.lat is None or args.long is None or args.height is None:
-                    parser.print_usage("Latitude, longitude, and height required", file=sys.stderr)
-                    sys.exit(2)
+                    usage_error("Latitude, longitude, and height required")
 
                 local_coordinates = get_local_coordinates_from_latlon(args.lat, args.long, args.height, DATABASE["Containers"][args.container])
                 Target = Location('Custom POI', args.container, local_coordinates, None, False)
@@ -117,18 +115,15 @@ def main():
     elif args.mode == "space_nav":
         if args.known:
             if args.target is None:
-                parser.print_usage("--target required for known target", file=sys.stderr)
-                sys.exit(2)
+                usage_error("--target required for known target")
 
             if not args.target in DATABASE["Space_POI"]:
-                print(f"Unknown target '{args.target}'", file=sys.stderr)
-                sys.exit(2)
+                usage_error(f"Unknown target '{args.target}'")
 
             Target = DATABASE["Space_POI"][args.target]
         else:
             if args.x is None or args.y is None or args.z is None:
-                parser.print_usage("X Y and Z coordinates required", file=sys.stderr)
-                sys.exit(2)
+                usage_error("X Y and Z coordinates required")
 
             Target = Location('Custom POI', None, Vector(args.x, args.y, args.z), None, False)
 
