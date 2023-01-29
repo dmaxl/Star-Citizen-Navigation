@@ -4,13 +4,14 @@ import json
 import logging
 from pathlib import Path
 import sqlite3
+from typing import Mapping
 
-from .utils import Vector, Quaternion, Location, OrbitalBody
+from .types import Vector, Quaternion, Location, OrbitalBody
 
 
 DEFAULT_DB_FILE = Path(__file__).resolve().parent / 'verse.db'
 
-_DICT_DATABASE = None
+_DICT_DATABASE: Mapping[str, Mapping[str, OrbitalBody]] = None
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +20,12 @@ def make_location_kwargs(data: dict):
     return {
         'name': data['Name'],
         'parent': data['Container'] if 'Container' in data else None,
-        'coord': Vector(data['X'], data['Y'], data['Z']),
-        'rot': Quaternion(data['qw'], data['qx'], data['qy'], data['qz']),
+        'coords': Vector(data['X'], data['Y'], data['Z']),
+        'rotation': Quaternion(data['qw'], data['qx'], data['qy'], data['qz']),
         'qtmarker': True if data['QTMarker'] == 'TRUE' else False,
     }
 
-def getDatabase() -> dict:
+def getDatabase():
     global _DICT_DATABASE
     if _DICT_DATABASE is None:
         with open('Database.json') as f:

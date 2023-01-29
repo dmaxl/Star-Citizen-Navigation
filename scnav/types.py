@@ -95,5 +95,16 @@ class OrbitalBody(Location):
     orbital_speed: float
     orbital_angle: float
     grid_radius: float
-    adjustment_date: float  # date corresponding to the rotation_adjust value
+    # adjustment_date: float  # date corresponding to the rotation_adjust value
     pois: Mapping[str, Location]
+
+    @property
+    def rotation_degrees_per_second(self):
+        target_Rotation_speed_in_hours_per_rotation = self.rotation_speed
+        if self.rotation_speed == 0:
+            return 0.0
+        return 0.1 * (1.0 / self.rotation_speed)
+
+    def rotation_at_time(self, ts):
+        """Return the rotation (in degrees) of this orbital body at a given time."""
+        return ((self.rotation_degrees_per_second * ts) + self.rotation_adjust) % 360
