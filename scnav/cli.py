@@ -21,6 +21,19 @@ from .utils import get_local_coordinates_from_latlon
 logger = logging.getLogger(__name__)
 
 
+def str_true_false(s):
+    if not isinstance(s, str):
+        raise TypeError(f"Expected string, not {type(s)}")
+
+    s_lower = s.lower()
+
+    if s_lower == "true":
+        return True
+    elif s_lower == "false":
+        return False
+    else:
+        return ValueError(f"Expected true or false, not '{s}'")
+
 def main():
     SETTINGS = getSettings()
     DATABASE = getDatabase()
@@ -32,7 +45,7 @@ def main():
     parser.add_argument('-v', '--verbose', action='count', default=0, help='increase output verbosity')
     parser.add_argument("mode", choices=["planetary_nav", "space_nav", "companion"])
     parser.add_argument("--container", type=str)
-    parser.add_argument("--known", type=bool)
+    parser.add_argument("--known", type=str_true_false)
     parser.add_argument("--target", type=str)
     parser.add_argument("--entry_type", type=str, choices=["xyz", "oms", "longlatheight"])
     parser.add_argument("--x", type=float)
