@@ -11,6 +11,7 @@ import pyperclip
 import sys
 import time
 
+from . import BASE_LOGGER
 from .compute import compute_planetary_nav, compute_space_nav, compute_companion
 from .db import getDatabase, getSettings
 from .types import Location, Vector
@@ -49,8 +50,9 @@ def main():
 
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
     loglvls = [logging.WARNING, logging.INFO, logging.DEBUG]
+    logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
+    BASE_LOGGER.setLevel(loglvls[min(args.verbose, len(loglvls)-1)])
     logger.setLevel(loglvls[min(args.verbose, len(loglvls)-1)])
 
     if args.mode == "planetary_nav":
