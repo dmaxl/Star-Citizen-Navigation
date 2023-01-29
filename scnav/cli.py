@@ -76,23 +76,30 @@ def main():
         if args.container is None:
             usage_error("--container required for planetary_nav")
 
-        if not args.container in DATABASE['Containers']:
+        if args.container not in DATABASE['Containers']:
             usage_error(f"Unknown container: '{args.container}'")
 
         if args.known:
             if args.target is None:
                 usage_error("--target required for known target")
 
-            if not args.target in DATABASE["Containers"][args.container].pois:
+            if args.target not in DATABASE["Containers"][args.container].pois:
                 usage_error(f"Unknown target '{args.target}' for container '{args.container}'")
 
             Target = DATABASE["Containers"][args.container].pois[args.target]
-        else :
+
+        else:
             if args.entry_type == "xyz":
                 if args.x is None or args.y is None or args.z is None:
-                    usage_error("X Y and Z coordinates required")
+                    usage_error("X, Y, and Z coordinates required")
 
-                Target = Location('Custom POI', args.container, Vector(args.x, args.y, args.z), None, False)
+                Target = Location(
+                    args.target if args.target else 'Custom POI',
+                    args.container,
+                    Vector(args.x, args.y, args.z),
+                    None,
+                    False
+                )
 
             elif args.entry_type == "oms":
                 arg_OM1_name = args.OM1_name
@@ -110,22 +117,35 @@ def main():
                     usage_error("Latitude, longitude, and height required")
 
                 local_coordinates = get_local_coordinates_from_latlon(args.lat, args.long, args.height, DATABASE["Containers"][args.container])
-                Target = Location('Custom POI', args.container, local_coordinates, None, False)
+                Target = Location(
+                    args.target if args.target else 'Custom POI',
+                    args.container,
+                    local_coordinates,
+                    None,
+                    False
+                )
 
     elif args.mode == "space_nav":
         if args.known:
             if args.target is None:
                 usage_error("--target required for known target")
 
-            if not args.target in DATABASE["Space_POI"]:
+            if args.target not in DATABASE["Space_POI"]:
                 usage_error(f"Unknown target '{args.target}'")
 
             Target = DATABASE["Space_POI"][args.target]
+
         else:
             if args.x is None or args.y is None or args.z is None:
                 usage_error("X Y and Z coordinates required")
 
-            Target = Location('Custom POI', None, Vector(args.x, args.y, args.z), None, False)
+            Target = Location(
+                args.target if args.target else 'Custom POI',
+                None,
+                Vector(args.x, args.y, args.z),
+                None,
+                False
+            )
 
     elif args.mode == "companion":
         pass
@@ -136,17 +156,16 @@ def main():
     logger.info("Python script ready to start !")
     logger.info("Mode: %s", args.mode)
 
-    try :
+    try:
         import ntplib
         c = ntplib.NTPClient()
         response = c.request('us.pool.ntp.org', version=3)
         server_time = response.tx_time
         time_offset = response.offset
+        logger.info('Time_offset: %f', time_offset)
     except:
         logger.warning("Could not get time offset from NTP server, assuming 0. Navigation may be inaccurate.")
         time_offset = 0
-
-    logger.info('Time_offset: %f', time_offset)
 
     if SETTINGS["logs_enabled"] == True:
         if not os.path.isdir('Logs'):
