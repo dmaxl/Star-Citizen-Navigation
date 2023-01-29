@@ -37,7 +37,7 @@ def str_true_false(s):
     elif s_lower == "false":
         return False
     else:
-        return ValueError(f"Expected true or false, not '{s}'")
+        raise ValueError(f"Expected true or false, not '{s}'")
 
 def usage_error(msg, code=2):
     print(msg, file=sys.stderr)
