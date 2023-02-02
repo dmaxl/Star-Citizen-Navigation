@@ -174,7 +174,13 @@ def get_sunset_sunrise_predictions(
         # Determine Rise/Set Hour Angle
         # The star rises at + (positive value) rise/set hour angle and sets at - (negative value) rise/set hour angle
         # Solar Declination and Apparent Radius come from the first set of equations when we determined where the star is.
-        RiseSetHourAngle = degrees(acos(-tan(radians(Latitude))*tan(radians(Solar_declination))))+Apparent_Radius+ElevationCorrection
+        try:
+            RiseSetHourAngle = degrees(acos(-tan(radians(Latitude))*tan(radians(Solar_declination))))+Apparent_Radius+ElevationCorrection
+        except ValueError as e:
+            if Solar_declination > 0:
+                return ["Daytime", "N/A", 0]
+            else:
+                return ["Nighttime", "N/A", 0]
 
         # Determine the current Hour Angle of the star
 
