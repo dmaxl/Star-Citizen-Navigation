@@ -1,6 +1,6 @@
 {
-    "update_checker": true,
-    "logs_enabled": true,
+    "update_checker": false,
+    "logs_enabled": false,
     "save_screenshots": false,
     "remember_choices": false,
     "last_choice_link": "../planetary_nav/planetary_nav.html?mode=planetary_nav&container=Daymar&known=true&target=Javelin Wreck"
